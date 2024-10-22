@@ -12,6 +12,9 @@ import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import Password from "primevue/password";
 import Message from "primevue/message";
+import Card from "primevue/card";
+import Menu from "primevue/menu";
+import ProgressSpinner from "primevue/progressspinner";
 
 // Core CSS
 import "primeicons/primeicons.css";
@@ -49,5 +52,8 @@ app.component("Button", Button);
 app.component("InputText", InputText);
 app.component("Password", Password);
 app.component("Message", Message);
+app.component("Card", Card);
+app.component("Menu", Menu);
+app.component("ProgressSpinner", ProgressSpinner);
 
 app.mount("#app");
