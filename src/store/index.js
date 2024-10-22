@@ -7,7 +7,8 @@ export default createStore({
     token: null,
     error: null,
     loading: false,
-    devices: [], // Add devices to state
+    devices: [],
+    deviceLastData: {}, // Add state for storing last data per device
   },
   mutations: {
     SET_USER(state, user) {
@@ -28,8 +29,14 @@ export default createStore({
       state.loading = loading;
     },
     SET_DEVICES(state, devices) {
-      // New mutation for devices
       state.devices = devices;
+    },
+    SET_DEVICE_LAST_DATA(state, { deviceId, data }) {
+      // New mutation for device last data
+      state.deviceLastData = {
+        ...state.deviceLastData,
+        [deviceId]: data,
+      };
     },
   },
   actions: {
@@ -59,7 +66,6 @@ export default createStore({
       commit("CLEAR_TOKEN");
     },
     async fetchDevices({ commit }) {
-      // New action for fetching devices
       try {
         commit("SET_LOADING", true);
         commit("SET_ERROR", null);
@@ -87,6 +93,38 @@ export default createStore({
         commit("SET_LOADING", false);
       }
     },
+    async fetchDeviceLastData({ commit }, deviceId) {
+      // New action for fetching device last data
+      try {
+        commit("SET_LOADING", true);
+        commit("SET_ERROR", null);
+
+        const token = localStorage.getItem("authToken");
+        if (!token) {
+          throw new Error("No authentication token found");
+        }
+
+        const response = await api.get(`/devices/${deviceId}/last-data`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        commit("SET_DEVICE_LAST_DATA", {
+          deviceId,
+          data: response.data,
+        });
+        return response.data;
+      } catch (error) {
+        const errorMessage =
+          error.response?.data?.message || "Failed to fetch device last data";
+        commit("SET_ERROR", errorMessage);
+        console.error("Device last data fetch error:", error);
+        throw error;
+      } finally {
+        commit("SET_LOADING", false);
+      }
+    },
   },
   getters: {
     isAuthenticated: (state) => !!state.token,
@@ -94,6 +132,7 @@ export default createStore({
     getError: (state) => state.error,
     isLoading: (state) => state.loading,
     getToken: (state) => state.token,
-    getDevices: (state) => state.devices, // New getter for devices
+    getDevices: (state) => state.devices,
+    getDeviceLastData: (state) => (deviceId) => state.deviceLastData[deviceId], // New getter for device last data
   },
 });
