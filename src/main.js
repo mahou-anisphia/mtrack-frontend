@@ -15,7 +15,7 @@ import Message from "primevue/message";
 import Card from "primevue/card";
 import Menu from "primevue/menu";
 import ProgressSpinner from "primevue/progressspinner";
-
+import Image from "primevue/image";
 // Core CSS
 import "primeicons/primeicons.css";
 import "primeflex/primeflex.css";
@@ -55,5 +55,6 @@ app.component("Message", Message);
 app.component("Card", Card);
 app.component("Menu", Menu);
 app.component("ProgressSpinner", ProgressSpinner);
+app.component("Image", Image);
 
 app.mount("#app");

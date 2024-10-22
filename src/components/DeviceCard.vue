@@ -1,6 +1,6 @@
 <!-- src/components/DeviceCard.vue -->
 <template>
-  <Card class="h-full device-card">
+  <Card class="h-full device-card" @click="navigateToDevice">
     <template #header>
       <div class="flex justify-content-between align-items-center px-4 py-3">
         <div class="text-xl font-bold">Device {{ device.device_id }}</div>
@@ -78,6 +78,9 @@ export default {
     deleteDevice() {
       console.log("Delete device:", this.device.device_id);
     },
+    navigateToDevice() {
+      this.$router.push(`/device/${this.device.device_id}`);
+    },
   },
 };
 </script>
@@ -101,5 +104,9 @@ export default {
   box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   transform: translateY(-2px);
   transition: all 0.2s ease-in-out;
+}
+
+.device-card {
+  cursor: pointer;
 }
 </style>
