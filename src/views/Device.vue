@@ -2,7 +2,25 @@
   <div class="min-h-screen">
     <div class="surface-card p-4">
       <div class="mb-4">
-        <h1 class="text-3xl font-bold">Device: {{ $route.params.id }}</h1>
+        <div class="flex justify-content-between align-items-center">
+          <h1 class="text-3xl font-bold">Device: {{ $route.params.id }}</h1>
+
+          <!-- View Toggle -->
+          <div class="p-buttonset">
+            <Button
+              :class="{ 'p-button-secondary': !isRealTimeView }"
+              @click="switchToRealTime"
+              icon="pi pi-clock"
+              label="Real-time"
+            />
+            <Button
+              :class="{ 'p-button-secondary': isRealTimeView }"
+              @click="switchToHistorical"
+              icon="pi pi-history"
+              label="Historical"
+            />
+          </div>
+        </div>
 
         <!-- Device Info Panel -->
         <div v-if="deviceData" class="mb-4">
@@ -74,6 +92,7 @@ const defaultIcon = L.icon({
 });
 
 L.Marker.prototype.options.icon = defaultIcon;
+
 export default {
   name: "Device",
   setup() {
@@ -84,6 +103,9 @@ export default {
     const error = ref(null);
     const deviceData = ref(null);
     const updateInterval = ref(null);
+    const isRealTimeView = ref(true);
+    const polyline = ref(null);
+    const historicalMarkers = ref([]);
 
     return {
       mapContainer,
@@ -93,10 +115,13 @@ export default {
       error,
       deviceData,
       updateInterval,
+      isRealTimeView,
+      polyline,
+      historicalMarkers,
     };
   },
   computed: {
-    ...mapGetters(["getDeviceLastData", "getError"]),
+    ...mapGetters(["getDeviceLastData", "getDeviceLocations", "getError"]),
     deviceId() {
       return this.$route.params.id;
     },
@@ -110,27 +135,187 @@ export default {
     initializeMap() {
       if (!this.mapContainer || this.map) return;
 
-      // Initialize Leaflet map
       this.map = L.map(this.mapContainer).setView([0, 0], 2);
 
-      // Add OpenStreetMap tiles
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
         attribution: "© OpenStreetMap contributors",
       }).addTo(this.map);
 
-      // Force a map resize after initialization
       setTimeout(() => {
         this.map.invalidateSize();
       }, 100);
     },
 
+    clearMapLayers() {
+      if (this.marker) {
+        this.marker.remove();
+        this.marker = null;
+      }
+      if (this.polyline) {
+        this.polyline.remove();
+        this.polyline = null;
+      }
+      this.historicalMarkers.forEach((marker) => {
+        if (marker && marker.remove) {
+          marker.remove();
+        }
+      });
+      this.historicalMarkers = [];
+    },
+
+    async switchToRealTime() {
+      if (this.isRealTimeView) return;
+      this.isRealTimeView = true;
+      this.clearMapLayers();
+      await this.updateDeviceData();
+
+      // Restart real-time updates
+      if (this.updateInterval) clearInterval(this.updateInterval);
+      this.updateInterval = setInterval(() => {
+        this.updateDeviceData();
+      }, 30000);
+    },
+
+    async switchToHistorical() {
+      if (!this.isRealTimeView) return;
+      this.isRealTimeView = false;
+      if (this.updateInterval) {
+        clearInterval(this.updateInterval);
+        this.updateInterval = null;
+      }
+      await this.displayHistoricalData();
+    },
+
+    createPopupContent(location, index) {
+      // Parse the ISO timestamp into a Date object
+      const date = new Date(location.timestamp);
+
+      return `
+        <div class="p-2">
+          <div class="font-bold mb-2">Location ${index + 1}</div>
+          <div>Time: ${date.toLocaleString()}</div>
+        </div>
+      `;
+    },
+
+    async displayHistoricalData() {
+      try {
+        this.loading = true;
+        this.error = null;
+
+        if (this.map) {
+          this.clearMapLayers();
+        }
+
+        await this.$store.dispatch("fetchDeviceLocations", this.deviceId);
+        const locations = this.getDeviceLocations(this.deviceId);
+
+        if (!locations || locations.length === 0) {
+          this.error = "No historical data available";
+          return;
+        }
+
+        const coordinates = locations
+          .map((loc) => {
+            const lat = parseFloat(loc.latitude);
+            const lng = parseFloat(loc.longitude);
+            if (isNaN(lat) || isNaN(lng)) {
+              console.error("Invalid coordinates:", loc);
+              return null;
+            }
+            return [lat, lng];
+          })
+          .filter((coord) => coord !== null);
+
+        if (coordinates.length < 2) {
+          this.error = "Not enough valid coordinates for route";
+          return;
+        }
+
+        // Create polyline first
+        this.polyline = new L.Polyline(coordinates, {
+          color: "blue",
+          weight: 3,
+          opacity: 0.7,
+          smoothFactor: 1,
+        });
+
+        if (this.map && this.polyline) {
+          this.polyline.addTo(this.map);
+        }
+
+        // Add markers for each location
+        locations.forEach((loc, index) => {
+          const lat = parseFloat(loc.latitude);
+          const lng = parseFloat(loc.longitude);
+
+          if (isNaN(lat) || isNaN(lng)) {
+            console.error("Invalid coordinates for marker:", loc);
+            return;
+          }
+
+          const marker = new L.Marker([lat, lng], {
+            icon: defaultIcon,
+          });
+
+          const popup = L.popup({
+            maxWidth: 300,
+            closeButton: true,
+            autoClose: false,
+          }).setContent(this.createPopupContent(loc, index));
+
+          marker.bindPopup(popup);
+          marker.addTo(this.map);
+          this.historicalMarkers.push(marker);
+        });
+
+        if (this.polyline) {
+          const bounds = this.polyline.getBounds();
+          this.map.fitBounds(bounds, {
+            padding: [50, 50],
+            maxZoom: 15,
+          });
+        }
+      } catch (err) {
+        this.error = "Failed to fetch or display historical data";
+        console.error("Historical data error:", err);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    clearMapLayers() {
+      // Remove existing polyline
+      if (this.polyline && this.map) {
+        this.map.removeLayer(this.polyline);
+        this.polyline = null;
+      }
+
+      // Remove existing markers
+      if (this.historicalMarkers.length > 0) {
+        this.historicalMarkers.forEach((marker) => {
+          if (marker && this.map) {
+            this.map.removeLayer(marker);
+          }
+        });
+        this.historicalMarkers = [];
+      }
+
+      // Remove real-time marker
+      if (this.marker && this.map) {
+        this.map.removeLayer(this.marker);
+        this.marker = null;
+      }
+    },
+
     async updateDeviceData() {
+      if (!this.isRealTimeView) return;
+
       try {
         this.error = null;
         this.loading = true;
 
-        // Call the Vuex action to fetch device data
         await this.$store.dispatch("fetchDeviceLastData", this.deviceId);
         this.deviceData = this.getDeviceLastData(this.deviceId);
 
@@ -138,38 +323,56 @@ export default {
           const lat = parseFloat(this.deviceData.latitude);
           const lng = parseFloat(this.deviceData.longitude);
 
-          // Initialize map if not already done
+          if (isNaN(lat) || isNaN(lng)) {
+            console.error(
+              "Invalid coordinates for real-time marker:",
+              this.deviceData
+            );
+            return;
+          }
+
           if (!this.map) {
             this.initializeMap();
           }
 
-          // Update marker position
-          if (this.marker) {
-            this.marker.setLatLng([lat, lng]);
-          } else {
-            this.marker = L.marker([lat, lng]).addTo(this.map);
-          }
-
-          // Center map on marker
-          this.map.setView([lat, lng], 15);
-
-          // Update popup content
-          this.marker
-            .bindPopup(
-              `
+          // Create popup content
+          const popupContent = `
             <div class="p-2">
               <div class="font-bold mb-2">Device ${this.deviceId}</div>
               <div>Speed: ${this.deviceData.current_speed} km/h</div>
               <div>Status: ${this.deviceData.status}</div>
               <div>Battery: ${this.deviceData.voltage / 10}V</div>
             </div>
-          `
-            )
-            .openPopup();
+          `;
+
+          // Create or update marker with popup
+          if (!this.marker) {
+            this.marker = new L.Marker([lat, lng], {
+              icon: defaultIcon,
+            });
+
+            const popup = L.popup({
+              maxWidth: 300,
+              closeButton: true,
+              autoClose: false,
+            }).setContent(popupContent);
+
+            this.marker.bindPopup(popup);
+            this.marker.addTo(this.map);
+          } else {
+            this.marker.setLatLng([lat, lng]);
+            this.marker.getPopup().setContent(popupContent);
+          }
+
+          // Center map on marker
+          this.map.setView([lat, lng], 15);
+
+          // Open popup
+          this.marker.openPopup();
         }
       } catch (err) {
         this.error = "Failed to fetch device data";
-        console.error(err);
+        console.error("Real-time data error:", err);
       } finally {
         this.loading = false;
       }
@@ -177,15 +380,15 @@ export default {
   },
   async mounted() {
     await this.$nextTick();
+    this.initializeMap();
     await this.updateDeviceData();
 
-    // Set up auto-refresh every 30 seconds
+    // Set up auto-refresh for real-time view
     this.updateInterval = setInterval(() => {
       this.updateDeviceData();
     }, 30000);
   },
   beforeUnmount() {
-    // Clean up
     if (this.map) {
       this.map.remove();
       this.map = null;
@@ -206,5 +409,9 @@ export default {
 
 .capitalize {
   text-transform: capitalize;
+}
+
+.p-buttonset .p-button {
+  margin: 0;
 }
 </style>

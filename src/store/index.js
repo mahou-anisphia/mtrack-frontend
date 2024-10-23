@@ -8,7 +8,8 @@ export default createStore({
     error: null,
     loading: false,
     devices: [],
-    deviceLastData: {}, // Add state for storing last data per device
+    deviceLastData: {},
+    deviceLocations: {}, // Add state for storing locations per device
   },
   mutations: {
     SET_USER(state, user) {
@@ -32,10 +33,16 @@ export default createStore({
       state.devices = devices;
     },
     SET_DEVICE_LAST_DATA(state, { deviceId, data }) {
-      // New mutation for device last data
       state.deviceLastData = {
         ...state.deviceLastData,
         [deviceId]: data,
+      };
+    },
+    SET_DEVICE_LOCATIONS(state, { deviceId, locations }) {
+      // New mutation for device locations
+      state.deviceLocations = {
+        ...state.deviceLocations,
+        [deviceId]: locations,
       };
     },
   },
@@ -94,7 +101,6 @@ export default createStore({
       }
     },
     async fetchDeviceLastData({ commit }, deviceId) {
-      // New action for fetching device last data
       try {
         commit("SET_LOADING", true);
         commit("SET_ERROR", null);
@@ -125,6 +131,38 @@ export default createStore({
         commit("SET_LOADING", false);
       }
     },
+    async fetchDeviceLocations({ commit }, deviceId) {
+      // New action for fetching device locations
+      try {
+        commit("SET_LOADING", true);
+        commit("SET_ERROR", null);
+
+        const token = localStorage.getItem("authToken");
+        if (!token) {
+          throw new Error("No authentication token found");
+        }
+
+        const response = await api.get(`/devices/${deviceId}/locations`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        commit("SET_DEVICE_LOCATIONS", {
+          deviceId,
+          locations: response.data,
+        });
+        return response.data;
+      } catch (error) {
+        const errorMessage =
+          error.response?.data?.message || "Failed to fetch device locations";
+        commit("SET_ERROR", errorMessage);
+        console.error("Device locations fetch error:", error);
+        throw error;
+      } finally {
+        commit("SET_LOADING", false);
+      }
+    },
   },
   getters: {
     isAuthenticated: (state) => !!state.token,
@@ -133,6 +171,8 @@ export default createStore({
     isLoading: (state) => state.loading,
     getToken: (state) => state.token,
     getDevices: (state) => state.devices,
-    getDeviceLastData: (state) => (deviceId) => state.deviceLastData[deviceId], // New getter for device last data
+    getDeviceLastData: (state) => (deviceId) => state.deviceLastData[deviceId],
+    getDeviceLocations: (state) => (deviceId) =>
+      state.deviceLocations[deviceId], // New getter for device locations
   },
 });
