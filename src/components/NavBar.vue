@@ -14,7 +14,6 @@
           />
         </router-link>
       </div>
-
       <!-- Right side with placeholder items -->
       <div class="flex align-items-center gap-4">
         <Button
@@ -23,20 +22,35 @@
           text
           rounded
           aria-label="Notifications"
+          v-tooltip.bottom="'Notifications'"
         />
-        <Button
-          icon="pi pi-user"
-          severity="secondary"
-          text
-          rounded
-          aria-label="User profile"
-        />
+        <div class="relative">
+          <Button
+            icon="pi pi-user"
+            severity="secondary"
+            text
+            rounded
+            aria-label="User profile"
+            v-tooltip.bottom="'User Profile'"
+            @click="toggleUserInfo"
+            ref="userBtn"
+          />
+          <Menu ref="menu" :model="userMenuItems" :popup="true">
+            <template #item="{ item }">
+              <div class="p-2">
+                <div class="font-semibold">Logged in as:</div>
+                <div class="mt-1">{{ username }}</div>
+              </div>
+            </template>
+          </Menu>
+        </div>
         <Button
           icon="pi pi-sign-out"
           severity="secondary"
           text
           rounded
           aria-label="Sign out"
+          v-tooltip.bottom="'Sign Out'"
           @click="handleSignOut"
         />
       </div>
@@ -45,11 +59,24 @@
 </template>
 
 <script setup>
+import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useStore } from "vuex";
+import * as jwtDecode from "jwt-decode";
+import Menu from "primevue/menu";
 
 const router = useRouter();
 const store = useStore();
+const menu = ref();
+const userBtn = ref();
+const username = ref("");
+
+// Menu items (empty array since we're using template slot)
+const userMenuItems = ref([{}]);
+
+const toggleUserInfo = (event) => {
+  menu.value.toggle(event);
+};
 
 const handleSignOut = async () => {
   try {
@@ -59,6 +86,23 @@ const handleSignOut = async () => {
     console.error("Logout failed:", error);
   }
 };
+
+onMounted(() => {
+  try {
+    const token = localStorage.getItem("authToken");
+    if (token) {
+      console.log("Token found:", token); // Debug log
+      const decoded = jwtDecode.jwtDecode(token);
+      console.log("Decoded token:", decoded); // Debug log
+      username.value = decoded.username;
+    } else {
+      console.log("No token found"); // Debug log
+    }
+  } catch (error) {
+    console.error("Error decoding token:", error);
+    username.value = "Unknown User";
+  }
+});
 </script>
 
 <style scoped>
@@ -66,5 +110,13 @@ const handleSignOut = async () => {
   height: 40px;
   width: auto;
   object-fit: contain;
+}
+
+:deep(.p-menu) {
+  min-width: 200px;
+}
+
+:deep(.p-menu-list) {
+  padding: 0;
 }
 </style>

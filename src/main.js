@@ -16,6 +16,8 @@ import Card from "primevue/card";
 import Menu from "primevue/menu";
 import ProgressSpinner from "primevue/progressspinner";
 import Image from "primevue/image";
+import Popover from "primevue/popover";
+import Tooltip from "primevue/tooltip";
 // Core CSS
 import "primeicons/primeicons.css";
 import "primeflex/primeflex.css";
@@ -56,5 +58,7 @@ app.component("Card", Card);
 app.component("Menu", Menu);
 app.component("ProgressSpinner", ProgressSpinner);
 app.component("Image", Image);
+app.component("Popover", Popover);
+app.directive("tooltip", Tooltip);
 
 app.mount("#app");
