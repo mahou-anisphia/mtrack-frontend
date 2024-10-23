@@ -5,7 +5,6 @@
         <div class="flex justify-content-between align-items-center">
           <h1 class="text-3xl font-bold">Device: {{ $route.params.id }}</h1>
 
-          <!-- View Toggle -->
           <div class="p-buttonset">
             <Button
               :class="{ 'p-button-secondary': !isRealTimeView }"
@@ -22,7 +21,6 @@
           </div>
         </div>
 
-        <!-- Device Info Panel -->
         <div v-if="deviceData" class="mb-4">
           <div class="grid">
             <div class="col-12 md:col-4">
@@ -45,7 +43,6 @@
         </div>
       </div>
 
-      <!-- Loading State -->
       <div
         v-if="loading"
         class="flex align-items-center justify-content-center"
@@ -54,7 +51,6 @@
         <i class="pi pi-spin pi-spinner text-3xl"></i>
       </div>
 
-      <!-- Error State -->
       <div
         v-else-if="error"
         class="flex align-items-center justify-content-center surface-danger p-3 border-round"
@@ -64,18 +60,17 @@
         {{ error }}
       </div>
 
-      <!-- Map Container -->
       <div
         v-show="!loading && !error"
         ref="mapContainer"
-        class="w-full h-30rem border-round"
+        class="w-full h-30rem border-round map-container"
       ></div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, onBeforeUnmount } from "vue";
+import { ref, onMounted, onBeforeUnmount, nextTick } from "vue";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { mapGetters } from "vuex";
@@ -106,6 +101,7 @@ export default {
     const isRealTimeView = ref(true);
     const polyline = ref(null);
     const historicalMarkers = ref([]);
+    const mapInitialized = ref(false);
 
     return {
       mapContainer,
@@ -118,6 +114,7 @@ export default {
       isRealTimeView,
       polyline,
       historicalMarkers,
+      mapInitialized,
     };
   },
   computed: {
@@ -132,9 +129,13 @@ export default {
       return datetime.toLocaleString();
     },
 
-    initializeMap() {
-      if (!this.mapContainer || this.map) return;
+    async initializeMap() {
+      if (!this.mapContainer || this.map || !this.mapInitialized) return;
 
+      // Wait for the container to be visible and have dimensions
+      await nextTick();
+
+      // Create map instance
       this.map = L.map(this.mapContainer).setView([0, 0], 2);
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -142,9 +143,20 @@ export default {
         attribution: "© OpenStreetMap contributors",
       }).addTo(this.map);
 
+      // Force a resize after a short delay
       setTimeout(() => {
-        this.map.invalidateSize();
-      }, 100);
+        if (this.map) {
+          this.map.invalidateSize();
+          // If we have data, update the view
+          if (this.deviceData) {
+            const lat = parseFloat(this.deviceData.latitude);
+            const lng = parseFloat(this.deviceData.longitude);
+            if (!isNaN(lat) && !isNaN(lng)) {
+              this.map.setView([lat, lng], 15);
+            }
+          }
+        }
+      }, 250);
     },
 
     clearMapLayers() {
@@ -285,27 +297,10 @@ export default {
       }
     },
 
-    clearMapLayers() {
-      // Remove existing polyline
-      if (this.polyline && this.map) {
-        this.map.removeLayer(this.polyline);
-        this.polyline = null;
-      }
-
-      // Remove existing markers
-      if (this.historicalMarkers.length > 0) {
-        this.historicalMarkers.forEach((marker) => {
-          if (marker && this.map) {
-            this.map.removeLayer(marker);
-          }
-        });
-        this.historicalMarkers = [];
-      }
-
-      // Remove real-time marker
-      if (this.marker && this.map) {
-        this.map.removeLayer(this.marker);
-        this.marker = null;
+    async ensureMapInitialized() {
+      if (!this.mapInitialized) {
+        this.mapInitialized = true;
+        await this.initializeMap();
       }
     },
 
@@ -319,7 +314,9 @@ export default {
         await this.$store.dispatch("fetchDeviceLastData", this.deviceId);
         this.deviceData = this.getDeviceLastData(this.deviceId);
 
-        if (this.deviceData) {
+        await this.ensureMapInitialized();
+
+        if (this.deviceData && this.map) {
           const lat = parseFloat(this.deviceData.latitude);
           const lng = parseFloat(this.deviceData.longitude);
 
@@ -331,11 +328,6 @@ export default {
             return;
           }
 
-          if (!this.map) {
-            this.initializeMap();
-          }
-
-          // Create popup content
           const popupContent = `
             <div class="p-2">
               <div class="font-bold mb-2">Device ${this.deviceId}</div>
@@ -345,7 +337,6 @@ export default {
             </div>
           `;
 
-          // Create or update marker with popup
           if (!this.marker) {
             this.marker = new L.Marker([lat, lng], {
               icon: defaultIcon,
@@ -364,10 +355,7 @@ export default {
             this.marker.getPopup().setContent(popupContent);
           }
 
-          // Center map on marker
           this.map.setView([lat, lng], 15);
-
-          // Open popup
           this.marker.openPopup();
         }
       } catch (err) {
@@ -379,14 +367,28 @@ export default {
     },
   },
   async mounted() {
-    await this.$nextTick();
-    this.initializeMap();
+    // Add resize observer to handle container size changes
+    const resizeObserver = new ResizeObserver(() => {
+      if (this.map) {
+        this.map.invalidateSize();
+      }
+    });
+
+    if (this.mapContainer) {
+      resizeObserver.observe(this.mapContainer);
+    }
+
+    await this.ensureMapInitialized();
     await this.updateDeviceData();
 
-    // Set up auto-refresh for real-time view
     this.updateInterval = setInterval(() => {
       this.updateDeviceData();
     }, 30000);
+
+    // Clean up observer on component unmount
+    onBeforeUnmount(() => {
+      resizeObserver.disconnect();
+    });
   },
   beforeUnmount() {
     if (this.map) {
@@ -413,5 +415,10 @@ export default {
 
 .p-buttonset .p-button {
   margin: 0;
+}
+
+.map-container {
+  position: relative;
+  min-height: 30rem;
 }
 </style>
