@@ -1,20 +1,22 @@
-// DeviceTracker.vue - Main component
 <template>
   <div class="min-h-screen">
     <div class="surface-card p-4">
-      <DeviceHeader
-        :deviceId="deviceId"
-        :isRealTimeView="isRealTimeView"
-        @switch-to-real-time="switchToRealTime"
-        @switch-to-historical="switchToHistorical"
-      />
+      <!-- Header and Device Info Block -->
+      <div class="device-header-info-block">
+        <DeviceHeader
+          :deviceId="deviceId"
+          :isRealTimeView="isRealTimeView"
+          @switch-to-real-time="switchToRealTime"
+          @switch-to-historical="switchToHistorical"
+        />
+        <DeviceInfo v-if="deviceData" :deviceData="deviceData" />
+      </div>
 
-      <DeviceInfo v-if="deviceData" :deviceData="deviceData" />
-
+      <!-- Loading or Error handling -->
       <LoadingSpinner v-if="loading" />
-
       <ErrorDisplay v-else-if="error" :error="error" />
 
+      <!-- Device Map Block -->
       <DeviceMap
         v-show="!loading && !error"
         ref="deviceMap"
@@ -50,7 +52,6 @@ export default {
     const deviceData = ref(null);
     const updateInterval = ref(null);
     const isRealTimeView = ref(true);
-
     return {
       loading,
       error,
@@ -71,13 +72,11 @@ export default {
       this.isRealTimeView = true;
       this.$refs.deviceMap.clearMapLayers();
       await this.updateDeviceData();
-
       if (this.updateInterval) clearInterval(this.updateInterval);
       this.updateInterval = setInterval(() => {
         this.updateDeviceData();
       }, 30000);
     },
-
     async switchToHistorical() {
       if (!this.isRealTimeView) return;
       this.isRealTimeView = false;
@@ -87,10 +86,8 @@ export default {
       }
       await this.$refs.deviceMap.displayHistoricalData();
     },
-
     async updateDeviceData() {
       if (!this.isRealTimeView) return;
-
       try {
         this.error = null;
         this.loading = true;
@@ -117,3 +114,10 @@ export default {
   },
 };
 </script>
+
+<style scoped>
+.device-header-info-block {
+  margin-bottom: 20px;
+  /* Add any additional styling to separate the blocks */
+}
+</style>
