@@ -132,10 +132,8 @@ export default {
     async initializeMap() {
       if (!this.mapContainer || this.map || !this.mapInitialized) return;
 
-      // Wait for the container to be visible and have dimensions
       await nextTick();
 
-      // Create map instance
       this.map = L.map(this.mapContainer).setView([0, 0], 2);
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -143,11 +141,9 @@ export default {
         attribution: "© OpenStreetMap contributors",
       }).addTo(this.map);
 
-      // Force a resize after a short delay
       setTimeout(() => {
         if (this.map) {
           this.map.invalidateSize();
-          // If we have data, update the view
           if (this.deviceData) {
             const lat = parseFloat(this.deviceData.latitude);
             const lng = parseFloat(this.deviceData.longitude);
@@ -182,7 +178,6 @@ export default {
       this.clearMapLayers();
       await this.updateDeviceData();
 
-      // Restart real-time updates
       if (this.updateInterval) clearInterval(this.updateInterval);
       this.updateInterval = setInterval(() => {
         this.updateDeviceData();
@@ -200,13 +195,12 @@ export default {
     },
 
     createPopupContent(location, index) {
-      // Parse the ISO timestamp into a Date object
       const date = new Date(location.timestamp);
-
       return `
         <div class="p-2">
           <div class="font-bold mb-2">Location ${index + 1}</div>
           <div>Time: ${date.toLocaleString()}</div>
+          <div>Speed: ${location.current_speed} km/h</div>
         </div>
       `;
     },
@@ -221,12 +215,19 @@ export default {
         }
 
         await this.$store.dispatch("fetchDeviceLocations", this.deviceId);
-        const locations = this.getDeviceLocations(this.deviceId);
+        let locations = this.getDeviceLocations(this.deviceId);
 
         if (!locations || locations.length === 0) {
           this.error = "No historical data available";
           return;
         }
+
+        // Sort locations by timestamp in ascending order
+        locations = locations.sort((a, b) => {
+          const timeA = new Date(a.timestamp).getTime();
+          const timeB = new Date(b.timestamp).getTime();
+          return timeA - timeB;
+        });
 
         const coordinates = locations
           .map((loc) => {
@@ -245,7 +246,7 @@ export default {
           return;
         }
 
-        // Create polyline first
+        // Create polyline with sorted coordinates
         this.polyline = new L.Polyline(coordinates, {
           color: "blue",
           weight: 3,
@@ -257,7 +258,7 @@ export default {
           this.polyline.addTo(this.map);
         }
 
-        // Add markers for each location
+        // Add markers in chronological order
         locations.forEach((loc, index) => {
           const lat = parseFloat(loc.latitude);
           const lng = parseFloat(loc.longitude);
@@ -367,7 +368,6 @@ export default {
     },
   },
   async mounted() {
-    // Add resize observer to handle container size changes
     const resizeObserver = new ResizeObserver(() => {
       if (this.map) {
         this.map.invalidateSize();
@@ -385,7 +385,6 @@ export default {
       this.updateDeviceData();
     }, 30000);
 
-    // Clean up observer on component unmount
     onBeforeUnmount(() => {
       resizeObserver.disconnect();
     });
