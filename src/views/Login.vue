@@ -1,8 +1,8 @@
-<!-- src/views/Login.vue -->
 <template>
   <div
     class="flex align-items-center justify-content-center min-h-screen bg-gray-100"
   >
+    <Toast />
     <div class="surface-card p-4 shadow-2 border-round w-full max-w-30rem">
       <div class="text-center mb-5">
         <!-- Added and styled logo -->
@@ -18,12 +18,7 @@
         </div>
         <span class="text-600 font-medium">Sign in to continue</span>
       </div>
-
       <form @submit.prevent="handleSubmit">
-        <Message v-if="error" severity="error" :closable="false" class="mb-4">
-          {{ error }}
-        </Message>
-
         <div class="mb-4">
           <label for="username" class="block text-900 font-medium mb-2"
             >Username</label
@@ -37,7 +32,6 @@
             required
           />
         </div>
-
         <div class="mb-4">
           <label for="password" class="block text-900 font-medium mb-2"
             >Password</label
@@ -61,7 +55,6 @@
             </Password>
           </div>
         </div>
-
         <Button
           type="submit"
           :label="isLoading ? 'Signing in...' : 'Sign In'"
@@ -78,12 +71,14 @@
 import { ref, computed } from "vue";
 import { useStore } from "vuex";
 import { useRouter } from "vue-router";
+import { useToast } from "primevue/usetoast";
 
 export default {
   name: "Login",
   setup() {
     const store = useStore();
     const router = useRouter();
+    const toast = useToast();
 
     const formData = ref({
       username: "",
@@ -96,8 +91,15 @@ export default {
     const handleSubmit = async () => {
       try {
         await store.dispatch("login", formData.value);
-        router.push("/");
+        localStorage.setItem("showWelcome", "true");
+        router.push({ path: "/" });
       } catch (error) {
+        toast.add({
+          severity: "error",
+          summary: "Login Failed",
+          detail: "Invalid username or password",
+          life: 5000,
+        });
         console.error("Login failed:", error);
       }
     };

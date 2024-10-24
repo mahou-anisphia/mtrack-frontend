@@ -8,6 +8,8 @@ import ProgressSpinner from "primevue/progressspinner";
 import Image from "primevue/image";
 import Popover from "primevue/popover";
 import Tooltip from "primevue/tooltip";
+import ToastService from "primevue/toastservice";
+import Toast from "primevue/toast";
 
 export function registerComponents(app) {
   app.component("Button", Button);
@@ -20,4 +22,6 @@ export function registerComponents(app) {
   app.component("Image", Image);
   app.component("Popover", Popover);
   app.directive("tooltip", Tooltip);
+  app.use(ToastService);
+  app.component("Toast", Toast);
 }

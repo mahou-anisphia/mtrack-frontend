@@ -81,6 +81,7 @@ const toggleUserInfo = (event) => {
 const handleSignOut = async () => {
   try {
     await store.dispatch("logout");
+    localStorage.removeItem("showWelcome");
     router.push("/login");
   } catch (error) {
     console.error("Logout failed:", error);

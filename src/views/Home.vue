@@ -1,6 +1,6 @@
-<!-- src/views/Home.vue -->
 <template>
   <div class="min-h-screen">
+    <Toast />
     <div class="surface-card p-4">
       <div class="mb-4 flex justify-content-between align-items-center">
         <h1 class="text-3xl font-bold">Devices Overview</h1>
@@ -11,12 +11,10 @@
           :loading="loading"
         />
       </div>
-
       <!-- Error message -->
       <Message v-if="error" severity="error" :sticky="true" class="mb-4">
         {{ error }}
       </Message>
-
       <!-- Devices grid -->
       <div class="grid">
         <div
@@ -26,7 +24,6 @@
         >
           <DeviceCard :device="device" />
         </div>
-
         <!-- Empty state -->
         <div v-if="!loading && devices.length === 0" class="col-12">
           <div class="surface-ground text-center py-6 px-4 border-round">
@@ -35,7 +32,6 @@
           </div>
         </div>
       </div>
-
       <!-- Loading overlay -->
       <ProgressSpinner
         v-if="loading && !devices.length"
@@ -47,12 +43,17 @@
 
 <script>
 import { mapState, mapGetters } from "vuex";
+import { useToast } from "primevue/usetoast";
 import DeviceCard from "../components/DeviceCard.vue";
 
 export default {
   name: "Home",
   components: {
     DeviceCard,
+  },
+  setup() {
+    const toast = useToast();
+    return { toast };
   },
   computed: {
     ...mapState({
@@ -72,9 +73,23 @@ export default {
         console.error("Failed to refresh devices:", error);
       }
     },
+    showWelcomeMessage() {
+      if (localStorage.getItem("showWelcome")) {
+        this.toast.add({
+          severity: "success",
+          summary: "Login Successful",
+          detail: "Welcome to Mtrack Asset Tracker Platform",
+          life: 3000,
+        });
+        localStorage.removeItem("showWelcome");
+      }
+    },
   },
   async created() {
     await this.refreshDevices();
+  },
+  mounted() {
+    this.showWelcomeMessage();
   },
 };
 </script>
