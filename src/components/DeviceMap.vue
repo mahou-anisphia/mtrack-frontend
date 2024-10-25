@@ -1,8 +1,20 @@
 <template>
-  <div
-    ref="mapContainer"
-    class="w-full h-30rem border-round map-container"
-  ></div>
+  <div>
+    <Message
+      v-if="errorMessage"
+      severity="error"
+      :closable="false"
+      class="mb-3"
+    >
+      {{ errorMessage }}
+    </Message>
+
+    <div
+      v-if="!errorMessage"
+      ref="mapContainer"
+      class="w-full h-30rem border-round map-container"
+    ></div>
+  </div>
 </template>
 
 <script>
@@ -51,6 +63,7 @@ export default {
     const polyline = ref(null);
     const historicalMarkers = ref([]);
     const mapInitialized = ref(false);
+    const errorMessage = ref(null);
 
     return {
       mapContainer,
@@ -59,6 +72,7 @@ export default {
       polyline,
       historicalMarkers,
       mapInitialized,
+      errorMessage,
     };
   },
   computed: {
@@ -66,6 +80,8 @@ export default {
   },
   methods: {
     async initializeMap() {
+      this.errorMessage = null;
+
       // Remove existing map if it exists
       if (this.map) {
         this.map.remove();
@@ -89,32 +105,8 @@ export default {
       setTimeout(() => {
         if (this.map) {
           this.map.invalidateSize();
-          if (this.deviceData) {
-            const lat = parseFloat(this.deviceData.latitude);
-            const lng = parseFloat(this.deviceData.longitude);
-            if (!isNaN(lat) && !isNaN(lng)) {
-              this.map.setView([lat, lng], 15);
-            }
-          }
         }
       }, 250);
-    },
-
-    clearMapLayers() {
-      if (this.marker) {
-        this.marker.remove();
-        this.marker = null;
-      }
-      if (this.polyline) {
-        this.polyline.remove();
-        this.polyline = null;
-      }
-      this.historicalMarkers.forEach((marker) => {
-        if (marker && marker.remove) {
-          marker.remove();
-        }
-      });
-      this.historicalMarkers = [];
     },
 
     createPopupContent(location, index) {
@@ -172,20 +164,25 @@ export default {
         let locations = this.getDeviceLocations(this.deviceId);
 
         if (!locations || locations.length === 0) {
-          throw new Error("No historical data available");
+          this.errorMessage = "No historical data available for this device";
+          return;
         }
 
         // Filter locations based on settings
         locations = this.filterLocationsByTimeAndLimit(locations);
 
         if (locations.length === 0) {
-          throw new Error("No data points within the specified time frame");
+          this.errorMessage = `No location data available within the selected time frame (${
+            this.displaySettings.timeFrame / 60
+          } minutes)`;
+          return;
         }
 
         const coordinates = this.getValidCoordinates(locations);
 
         if (coordinates.length === 0) {
-          throw new Error("No valid coordinates found in the data");
+          this.errorMessage = "No valid coordinates found in the data";
+          return;
         }
 
         // Create polyline if we have at least one coordinate
@@ -226,7 +223,8 @@ export default {
         }
       } catch (err) {
         console.error("Historical data error:", err);
-        throw err;
+        this.errorMessage =
+          "Error loading historical data. Please try again later.";
       }
     },
 
@@ -236,7 +234,11 @@ export default {
       const lat = parseFloat(this.deviceData.latitude);
       const lng = parseFloat(this.deviceData.longitude);
 
-      if (isNaN(lat) || isNaN(lng)) return;
+      if (isNaN(lat) || isNaN(lng)) {
+        this.errorMessage =
+          "Invalid coordinates received for real-time tracking";
+        return;
+      }
 
       const popupContent = `
         <div class="p-2">
@@ -261,6 +263,20 @@ export default {
 
       this.map.setView([lat, lng], 15);
     },
+
+    async refreshMap() {
+      this.errorMessage = null;
+      await this.initializeMap();
+      if (this.isRealTimeView) {
+        if (this.deviceData) {
+          this.updateMarker();
+        } else {
+          this.errorMessage = "This device haven't update its data recently";
+        }
+      } else {
+        await this.displayHistoricalData();
+      }
+    },
   },
   watch: {
     deviceData: {
@@ -273,34 +289,19 @@ export default {
     },
     displaySettings: {
       handler() {
-        this.clearMapLayers();
-        if (this.isRealTimeView) {
-          this.updateMarker();
-        } else {
-          this.displayHistoricalData();
-        }
+        this.refreshMap();
       },
       deep: true,
     },
     isRealTimeView: {
-      async handler(newValue) {
-        // Completely reset the map when switching modes
-        await this.initializeMap();
-
-        if (newValue) {
-          if (this.deviceData) {
-            this.updateMarker();
-          }
-        } else {
-          this.displayHistoricalData();
-        }
+      handler() {
+        this.refreshMap();
       },
-      immediate: true,
     },
   },
   async mounted() {
     this.mapInitialized = true;
-    await this.initializeMap();
+    await this.refreshMap();
 
     const resizeObserver = new ResizeObserver(() => {
       if (this.map) {
