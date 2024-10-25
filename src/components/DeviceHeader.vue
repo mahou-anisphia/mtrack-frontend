@@ -11,37 +11,58 @@
         />
         <h1 class="text-3xl font-bold">Device: {{ deviceId }}</h1>
       </div>
-      <div class="p-buttonset">
-        <Button
-          :class="{ 'p-button-secondary': !isRealTimeView }"
-          @click="$emit('switch-to-real-time')"
-          icon="pi pi-clock"
-          label="Real-time"
-          v-tooltip.bottom="'Real-time monitoring'"
-        />
-        <Button
-          :class="{ 'p-button-secondary': isRealTimeView }"
-          @click="$emit('switch-to-historical')"
-          icon="pi pi-history"
-          label="Historical"
-          v-tooltip.bottom="'Edit historical settings'"
-        />
-      </div>
+      <Button
+        class="p-button-secondary"
+        @click="showDisplaySettings"
+        icon="pi pi-cog"
+        label="Display Settings"
+        v-tooltip.bottom="'Configure display settings'"
+      />
     </div>
+
+    <!-- Display Settings Dialog -->
+    <DisplaySettingsDialog
+      v-model="showSettingsDialog"
+      :initial-settings="currentSettings"
+      @apply-settings="handleDisplaySettings"
+    />
   </div>
 </template>
 
 <script>
+import DisplaySettingsDialog from "./DisplaySettingsDialog.vue";
+
 export default {
   name: "DeviceHeader",
+  components: {
+    DisplaySettingsDialog,
+  },
   props: {
     deviceId: {
       type: String,
       required: true,
     },
-    isRealTimeView: {
-      type: Boolean,
-      required: true,
+    currentSettings: {
+      type: Object,
+      default: () => ({
+        displayMode: "last",
+        timeFrame: 300,
+        dataPoints: 100,
+        displayAllMarkers: false,
+      }),
+    },
+  },
+  data() {
+    return {
+      showSettingsDialog: false,
+    };
+  },
+  methods: {
+    showDisplaySettings() {
+      this.showSettingsDialog = true;
+    },
+    handleDisplaySettings(settings) {
+      this.$emit("settings-changed", settings);
     },
   },
 };

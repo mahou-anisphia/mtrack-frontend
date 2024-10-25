@@ -5,9 +5,8 @@
       <div class="device-header-info-block">
         <DeviceHeader
           :deviceId="deviceId"
-          :isRealTimeView="isRealTimeView"
-          @switch-to-real-time="switchToRealTime"
-          @switch-to-historical="switchToHistorical"
+          :currentSettings="displaySettings"
+          @settings-changed="handleDisplaySettingsChange"
         />
         <DeviceInfo v-if="deviceData" :deviceData="deviceData" />
       </div>
@@ -23,6 +22,7 @@
         :deviceData="deviceData"
         :isRealTimeView="isRealTimeView"
         :deviceId="deviceId"
+        :displaySettings="displaySettings"
       />
     </div>
   </div>
@@ -52,12 +52,20 @@ export default {
     const deviceData = ref(null);
     const updateInterval = ref(null);
     const isRealTimeView = ref(true);
+    const displaySettings = ref({
+      displayMode: "last",
+      timeFrame: 300,
+      dataPoints: 100,
+      displayAllMarkers: false,
+    });
+
     return {
       loading,
       error,
       deviceData,
       updateInterval,
       isRealTimeView,
+      displaySettings,
     };
   },
   computed: {
@@ -66,7 +74,29 @@ export default {
       return this.$route.params.id;
     },
   },
+  watch: {
+    "displaySettings.displayMode": {
+      handler(newMode) {
+        console.log("Display mode changed:", newMode);
+        if (newMode === "last") {
+          this.switchToRealTime();
+        } else {
+          this.switchToHistorical();
+        }
+      },
+    },
+  },
   methods: {
+    handleDisplaySettingsChange(newSettings) {
+      console.log("Device page received new settings:", newSettings);
+      this.displaySettings = { ...newSettings };
+
+      // You might want to store these settings in localStorage or Vuex
+      localStorage.setItem(
+        `device-${this.deviceId}-settings`,
+        JSON.stringify(newSettings)
+      );
+    },
     async switchToRealTime() {
       if (this.isRealTimeView) return;
       this.isRealTimeView = true;
@@ -100,8 +130,17 @@ export default {
         this.loading = false;
       }
     },
+    loadSavedSettings() {
+      const savedSettings = localStorage.getItem(
+        `device-${this.deviceId}-settings`
+      );
+      if (savedSettings) {
+        this.displaySettings = JSON.parse(savedSettings);
+      }
+    },
   },
   async mounted() {
+    this.loadSavedSettings();
     await this.updateDeviceData();
     this.updateInterval = setInterval(() => {
       this.updateDeviceData();
@@ -118,6 +157,5 @@ export default {
 <style scoped>
 .device-header-info-block {
   margin-bottom: 20px;
-  /* Add any additional styling to separate the blocks */
 }
 </style>

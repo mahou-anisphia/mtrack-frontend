@@ -1,4 +1,3 @@
-<!-- // components/DeviceMap.vue -->
 <template>
   <div
     ref="mapContainer"
@@ -40,6 +39,10 @@ export default {
       type: String,
       required: true,
     },
+    displaySettings: {
+      type: Object,
+      required: true,
+    },
   },
   setup() {
     const mapContainer = ref(null);
@@ -63,7 +66,13 @@ export default {
   },
   methods: {
     async initializeMap() {
-      if (!this.mapContainer || this.map || !this.mapInitialized) return;
+      // Remove existing map if it exists
+      if (this.map) {
+        this.map.remove();
+        this.map = null;
+      }
+
+      if (!this.mapContainer || !this.mapInitialized) return;
 
       this.map = L.map(this.mapContainer).setView([0, 0], 2);
 
@@ -71,6 +80,11 @@ export default {
         maxZoom: 19,
         attribution: "© OpenStreetMap contributors",
       }).addTo(this.map);
+
+      // Reset all layer references
+      this.marker = null;
+      this.polyline = null;
+      this.historicalMarkers = [];
 
       setTimeout(() => {
         if (this.map) {
@@ -114,6 +128,44 @@ export default {
       `;
     },
 
+    filterLocationsByTimeAndLimit(locations) {
+      if (!locations || locations.length === 0) return [];
+
+      // Sort locations by timestamp
+      const sortedLocations = locations.sort((a, b) => {
+        return new Date(b.timestamp) - new Date(a.timestamp);
+      });
+
+      // Filter by time frame
+      const currentTime = new Date();
+      const timeFrameStart = new Date(
+        currentTime - this.displaySettings.timeFrame * 1000
+      );
+
+      const timeFilteredLocations = sortedLocations.filter((location) => {
+        const locationTime = new Date(location.timestamp);
+        return locationTime >= timeFrameStart;
+      });
+
+      // If we have fewer locations than requested data points, return all available locations
+      if (timeFilteredLocations.length <= this.displaySettings.dataPoints) {
+        return timeFilteredLocations;
+      }
+
+      // Otherwise, limit by data points
+      return timeFilteredLocations.slice(0, this.displaySettings.dataPoints);
+    },
+
+    getValidCoordinates(locations) {
+      return locations
+        .map((loc) => {
+          const lat = parseFloat(loc.latitude);
+          const lng = parseFloat(loc.longitude);
+          return !isNaN(lat) && !isNaN(lng) ? [lat, lng] : null;
+        })
+        .filter((coord) => coord !== null);
+    },
+
     async displayHistoricalData() {
       try {
         await this.$store.dispatch("fetchDeviceLocations", this.deviceId);
@@ -123,45 +175,55 @@ export default {
           throw new Error("No historical data available");
         }
 
-        locations = locations.sort((a, b) => {
-          return new Date(a.timestamp) - new Date(b.timestamp);
-        });
+        // Filter locations based on settings
+        locations = this.filterLocationsByTimeAndLimit(locations);
 
-        const coordinates = locations
-          .map((loc) => {
-            const lat = parseFloat(loc.latitude);
-            const lng = parseFloat(loc.longitude);
-            return !isNaN(lat) && !isNaN(lng) ? [lat, lng] : null;
-          })
-          .filter((coord) => coord !== null);
-
-        if (coordinates.length < 2) {
-          throw new Error("Not enough valid coordinates for route");
+        if (locations.length === 0) {
+          throw new Error("No data points within the specified time frame");
         }
 
-        this.polyline = new L.Polyline(coordinates, {
-          color: "blue",
-          weight: 3,
-          opacity: 0.7,
-          smoothFactor: 1,
-        }).addTo(this.map);
+        const coordinates = this.getValidCoordinates(locations);
 
-        locations.forEach((loc, index) => {
-          const lat = parseFloat(loc.latitude);
-          const lng = parseFloat(loc.longitude);
+        if (coordinates.length === 0) {
+          throw new Error("No valid coordinates found in the data");
+        }
 
-          if (!isNaN(lat) && !isNaN(lng)) {
-            const marker = new L.Marker([lat, lng])
-              .bindPopup(this.createPopupContent(loc, index))
-              .addTo(this.map);
-            this.historicalMarkers.push(marker);
-          }
-        });
+        // Create polyline if we have at least one coordinate
+        if (coordinates.length >= 1) {
+          this.polyline = new L.Polyline(coordinates, {
+            color: "blue",
+            weight: 3,
+            opacity: 0.7,
+            smoothFactor: 1,
+          }).addTo(this.map);
+        }
 
-        this.map.fitBounds(this.polyline.getBounds(), {
-          padding: [50, 50],
-          maxZoom: 15,
-        });
+        // Add markers only if displayAllMarkers is true
+        if (this.displaySettings.displayAllMarkers) {
+          locations.forEach((loc, index) => {
+            const lat = parseFloat(loc.latitude);
+            const lng = parseFloat(loc.longitude);
+
+            if (!isNaN(lat) && !isNaN(lng)) {
+              const marker = new L.Marker([lat, lng])
+                .bindPopup(this.createPopupContent(loc, index))
+                .addTo(this.map);
+              this.historicalMarkers.push(marker);
+            }
+          });
+        }
+
+        // If we have a polyline, fit bounds to it
+        if (this.polyline) {
+          this.map.fitBounds(this.polyline.getBounds(), {
+            padding: [50, 50],
+            maxZoom: 15,
+          });
+        }
+        // If we have only one coordinate, center on it
+        else if (coordinates.length === 1) {
+          this.map.setView(coordinates[0], 15);
+        }
       } catch (err) {
         console.error("Historical data error:", err);
         throw err;
@@ -185,17 +247,19 @@ export default {
         </div>
       `;
 
-      if (!this.marker) {
-        this.marker = new L.Marker([lat, lng])
-          .bindPopup(popupContent)
-          .addTo(this.map);
-      } else {
-        this.marker.setLatLng([lat, lng]);
-        this.marker.getPopup().setContent(popupContent);
+      if (this.displaySettings.displayAllMarkers) {
+        if (!this.marker) {
+          this.marker = new L.Marker([lat, lng])
+            .bindPopup(popupContent)
+            .addTo(this.map);
+        } else {
+          this.marker.setLatLng([lat, lng]);
+          this.marker.getPopup().setContent(popupContent);
+        }
+        this.marker.openPopup();
       }
 
       this.map.setView([lat, lng], 15);
-      this.marker.openPopup();
     },
   },
   watch: {
@@ -206,6 +270,32 @@ export default {
         }
       },
       deep: true,
+    },
+    displaySettings: {
+      handler() {
+        this.clearMapLayers();
+        if (this.isRealTimeView) {
+          this.updateMarker();
+        } else {
+          this.displayHistoricalData();
+        }
+      },
+      deep: true,
+    },
+    isRealTimeView: {
+      async handler(newValue) {
+        // Completely reset the map when switching modes
+        await this.initializeMap();
+
+        if (newValue) {
+          if (this.deviceData) {
+            this.updateMarker();
+          }
+        } else {
+          this.displayHistoricalData();
+        }
+      },
+      immediate: true,
     },
   },
   async mounted() {

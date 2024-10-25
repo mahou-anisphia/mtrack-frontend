@@ -12,8 +12,20 @@ import ToastService from "primevue/toastservice";
 import Toast from "primevue/toast";
 import FloatLabel from "primevue/floatlabel";
 import Tag from "primevue/tag";
+import SelectButton from "primevue/selectbutton";
+import Dialog from "primevue/dialog";
+import Slider from "primevue/slider";
+import Dropdown from "primevue/dropdown";
+import InputNumber from "primevue/inputnumber";
+import Checkbox from "primevue/checkbox";
 
 export function registerComponents(app) {
+  app.component("SelectButton", SelectButton);
+  app.component("Dialog", Dialog);
+  app.component("Slider", Slider);
+  app.component("Dropdown", Dropdown);
+  app.component("InputNumber", InputNumber);
+  app.component("Checkbox", Checkbox);
   app.component("Button", Button);
   app.component("InputText", InputText);
   app.component("Password", Password);
