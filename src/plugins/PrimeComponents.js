@@ -11,6 +11,7 @@ import Tooltip from "primevue/tooltip";
 import ToastService from "primevue/toastservice";
 import Toast from "primevue/toast";
 import FloatLabel from "primevue/floatlabel";
+import Tag from "primevue/tag";
 
 export function registerComponents(app) {
   app.component("Button", Button);
@@ -26,4 +27,5 @@ export function registerComponents(app) {
   app.use(ToastService);
   app.component("Toast", Toast);
   app.component("FloatLabel", FloatLabel);
+  app.component("Tag", Tag);
 }
