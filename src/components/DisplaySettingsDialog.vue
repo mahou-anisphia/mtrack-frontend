@@ -119,6 +119,11 @@ export default {
         { label: "Last 6 hours", value: 21600 },
         { label: "Last 12 hours", value: 43200 },
         { label: "Last 24 hours", value: 86400 },
+        { label: "Last week", value: 604800 },
+        { label: "Last month", value: 2592000 },
+        { label: "Last 3 months", value: 7776000 },
+        { label: "Last 6 months", value: 15552000 },
+        { label: "Last year", value: 31536000 },
       ],
     };
   },
