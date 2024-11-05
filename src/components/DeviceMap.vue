@@ -11,6 +11,7 @@
 
     <div
       v-if="!errorMessage"
+      :key="mapKey"
       ref="mapContainer"
       class="w-full h-30rem border-round map-container"
     ></div>
@@ -64,7 +65,51 @@ export default {
     const polyline = ref(null);
     const historicalMarkers = ref([]);
     const errorMessage = ref(null);
-    let resizeObserver = null;
+    const resizeObserver = ref(null);
+    const isInitializing = ref(false);
+    const mapKey = ref(0);
+
+    const cleanupMap = async () => {
+      // Clear all markers
+      if (historicalMarkers.value.length) {
+        historicalMarkers.value.forEach((marker) => {
+          if (marker) marker.remove();
+        });
+        historicalMarkers.value = [];
+      }
+
+      if (marker.value) {
+        marker.value.remove();
+        marker.value = null;
+      }
+
+      if (polyline.value) {
+        polyline.value.remove();
+        polyline.value = null;
+      }
+
+      // Clean up resize observer
+      if (resizeObserver.value) {
+        resizeObserver.value.disconnect();
+        resizeObserver.value = null;
+      }
+
+      // Remove map instance
+      if (map.value) {
+        map.value.remove();
+        map.value = null;
+      }
+
+      // Force DOM cleanup
+      mapKey.value++;
+
+      // Wait for cleanup to complete
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    };
+
+    onBeforeUnmount(async () => {
+      await cleanupMap();
+    });
 
     return {
       mapContainer,
@@ -74,37 +119,28 @@ export default {
       historicalMarkers,
       errorMessage,
       resizeObserver,
+      isInitializing,
+      mapKey,
+      cleanupMap,
     };
   },
   computed: {
     ...mapGetters(["getDeviceLocations"]),
   },
   methods: {
-    clearLayers() {
-      if (this.marker) {
-        this.marker.remove();
-        this.marker = null;
-      }
-      if (this.polyline) {
-        this.polyline.remove();
-        this.polyline = null;
-      }
-      this.historicalMarkers.forEach((marker) => marker.remove());
-      this.historicalMarkers = [];
-    },
-
     async initializeMap() {
+      if (this.isInitializing) {
+        return false;
+      }
+
+      this.isInitializing = true;
       this.errorMessage = null;
 
       try {
-        // Clear existing map
-        if (this.map) {
-          this.clearLayers();
-          this.map.remove();
-          this.map = null;
-        }
+        // Ensure complete cleanup
+        await this.cleanupMap();
 
-        // Wait for the container to be available
+        // Wait for the next tick to ensure DOM is updated
         await this.$nextTick();
 
         if (!this.mapContainer) {
@@ -120,18 +156,28 @@ export default {
           attribution: "© OpenStreetMap contributors",
         }).addTo(this.map);
 
-        // Force a redraw after initialization
-        setTimeout(() => {
+        // Setup resize observer
+        this.resizeObserver = new ResizeObserver(() => {
           if (this.map) {
             this.map.invalidateSize();
           }
-        }, 250);
+        });
+
+        this.resizeObserver.observe(this.mapContainer);
+
+        // Force a redraw
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        if (this.map) {
+          this.map.invalidateSize();
+        }
 
         return true;
       } catch (error) {
         console.error("Map initialization error:", error);
         this.errorMessage = "Error initializing map. Please try again.";
         return false;
+      } finally {
+        this.isInitializing = false;
       }
     },
 
@@ -183,9 +229,7 @@ export default {
 
     async displayHistoricalData() {
       try {
-        if (!this.map) {
-          throw new Error("Map not initialized");
-        }
+        if (!this.map) return;
 
         await this.$store.dispatch("fetchDeviceLocations", this.deviceId);
         let locations = this.getDeviceLocations(this.deviceId);
@@ -209,8 +253,13 @@ export default {
           return;
         }
 
-        // Clear existing layers before adding new ones
-        this.clearLayers();
+        // Clear existing markers and polylines
+        this.historicalMarkers.forEach((marker) => marker.remove());
+        this.historicalMarkers = [];
+        if (this.polyline) {
+          this.polyline.remove();
+          this.polyline = null;
+        }
 
         // Add polyline if we have multiple coordinates
         if (coordinates.length > 1) {
@@ -298,13 +347,27 @@ export default {
 
     async refreshMap() {
       this.errorMessage = null;
-      const initialized = await this.initializeMap();
 
+      // Wait for any pending initialization to complete
+      if (this.isInitializing) {
+        await new Promise((resolve) => {
+          const checkInit = () => {
+            if (!this.isInitializing) {
+              resolve();
+            } else {
+              setTimeout(checkInit, 50);
+            }
+          };
+          checkInit();
+        });
+      }
+
+      const initialized = await this.initializeMap();
       if (!initialized) return;
 
       if (this.isRealTimeView) {
         if (this.deviceData) {
-          this.updateRealTimeMarker();
+          await this.updateRealTimeMarker();
         } else {
           this.errorMessage = "This device hasn't updated its data recently";
         }
@@ -336,27 +399,6 @@ export default {
   },
   async mounted() {
     await this.refreshMap();
-
-    // Setup resize observer
-    this.resizeObserver = new ResizeObserver(() => {
-      if (this.map) {
-        this.map.invalidateSize();
-      }
-    });
-
-    if (this.mapContainer) {
-      this.resizeObserver.observe(this.mapContainer);
-    }
-  },
-  beforeUnmount() {
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect();
-    }
-    this.clearLayers();
-    if (this.map) {
-      this.map.remove();
-      this.map = null;
-    }
   },
 };
 </script>
