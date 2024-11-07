@@ -19,11 +19,11 @@
       </div>
       <div>
         <div class="text-500 mb-2">Latitude</div>
-        <div>{{ deviceData.latitude.toFixed(6) }}°</div>
+        <div>{{ deviceData.latitude }}°</div>
       </div>
       <div>
         <div class="text-500 mb-2">Longitude</div>
-        <div>{{ deviceData.longitude.toFixed(6) }}°</div>
+        <div>{{ deviceData.longitude }}°</div>
       </div>
     </div>
   </div>
