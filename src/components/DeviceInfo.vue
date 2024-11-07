@@ -1,7 +1,7 @@
 <!-- components/DeviceInfo.vue -->
 <template>
   <div class="mb-4">
-    <div class="grid grid-cols-4 gap-4 w-full">
+    <div class="grid grid-cols-6 gap-4 w-full">
       <DeviceBattery :voltage="deviceData.voltage" />
       <div>
         <div class="text-500 mb-2">Last Updated</div>
@@ -16,6 +16,14 @@
       <div>
         <div class="text-500 mb-2">Status</div>
         <div class="capitalize">{{ deviceData.status.replace("_", " ") }}</div>
+      </div>
+      <div>
+        <div class="text-500 mb-2">Latitude</div>
+        <div>{{ deviceData.latitude.toFixed(6) }}°</div>
+      </div>
+      <div>
+        <div class="text-500 mb-2">Longitude</div>
+        <div>{{ deviceData.longitude.toFixed(6) }}°</div>
       </div>
     </div>
   </div>
